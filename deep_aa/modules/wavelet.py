@@ -1,0 +1,116 @@
+import torch.nn as nn
+import torch.nn.functional as F
+from deep_aa.functional.wavelet import get_wavelet_filter_tensor
+
+
+class DyadicWavelet(nn.Module):
+    def __init__(self,
+                 channels_in,
+                 family,
+                 dim=2,
+                 step='dec',
+                 filters='full',
+                 no_resample=False,
+                 flip=True,
+                 padding='zero'):
+
+        super().__init__()
+
+        # Validate inputs
+        if not (1 <= dim <= 3):
+            raise ValueError(f"Convolutions of dimension {dim} not supported")
+
+        if step not in ['dec', 'rec']:
+            raise ValueError(f"Parameter 'step' must be one of 'dec' or 'rec'")
+
+        # If we're resampling the convolution, then we need to use a transposed
+        # conv2d, so we need to flip the filters (this is somewhat of an irritating
+        # technicality)
+        self.resample = not no_resample
+        if self.resample and step == 'rec':
+            flip ^= flip
+
+        # 'filters' will be validated by get_wavelet_filter_tensor()
+        filter_tensor = get_wavelet_filter_tensor(family,
+                                                  dim=dim,
+                                                  step=step,
+                                                  filters=filters,
+                                                  flip=flip)
+        self.register_buffer('firbank', filter_tensor)
+
+        p_all = [[p//2, p//2 - (p+1) % 2] for p in filter_tensor.shape[-dim:]]
+
+        # If we're flipping the filter (xor) doing the reconstruction
+        # stage, we change the shape of the padding (in the even case of padding)
+        if flip != (step == 'rec'):
+            for idx in range(dim):
+                p_all[idx][0], p_all[idx][1] = p_all[idx][1], p_all[idx][0]
+
+        p_all = sum(p_all, [])
+        self.padding = tuple(p_all)
+
+        self.step = step
+        self.dim = dim
+        self.bands_out = filter_tensor.shape[0]
+        self.channels_in = channels_in
+        self.channels_out = channels_in * self.bands_out if step == 'dec' else channels_in // self.bands_out
+
+    def forward(self, x):
+        local_stride = 2 if self.resample else 1
+
+        if self.step == 'dec':
+            x = F.pad(x, self.padding, mode='constant')
+            if self.dim == 1:
+                local_filter = self.firbank[:, None, ...].repeat(self.channels_in, 1, 1)
+                x = F.conv1d(x, local_filter, groups=self.channels_in, stride=local_stride)
+            elif self.dim == 2:
+                local_filter = self.firbank[:, None, ...].repeat(self.channels_in, 1, 1, 1)
+                x = F.conv2d(x, local_filter, groups=self.channels_in, stride=local_stride)
+            elif self.dim == 3:
+                local_filter = self.firbank[:, None, ...].repeat(self.channels_in, 1, 1, 1, 1)
+                x = F.conv3d(x, local_filter, groups=self.channels_in, stride=local_stride)
+            x = F.channel_shuffle(x, self.channels_in)
+
+        else:
+            groups = self.channels_in // self.bands_out
+            x = F.channel_shuffle(x, self.channels_in // self.channels_out)
+
+            if self.resample:
+
+                if self.dim == 1:
+                    local_filter = self.firbank[:, None, ...].repeat(groups, 1, 1)
+                    padding = [(p-2)//2 for p in local_filter.shape[-self.dim:]]
+                    x = F.conv_transpose1d(x,
+                                           local_filter,
+                                           groups=groups,
+                                           padding=padding,
+                                           stride=local_stride)
+                elif self.dim == 2:
+                    local_filter = self.firbank[:, None, ...].repeat(groups, 1, 1, 1)
+                    padding = [(p-2)//2 for p in local_filter.shape[-self.dim:]]
+                    x = F.conv_transpose2d(x,
+                                           local_filter,
+                                           groups=groups,
+                                           padding=padding,
+                                           stride=local_stride)
+                elif self.dim == 3:
+                    local_filter = self.firbank[:, None, ...].repeat(groups, 1, 1, 1, 1)
+                    padding = [(p-2)//2 for p in local_filter.shape[-self.dim:]]
+                    x = F.conv_transpose3d(x,
+                                           local_filter,
+                                           groups=groups,
+                                           padding=padding,
+                                           stride=local_stride)
+
+            else:
+                local_filter = self.firbank[None, :, ...].repeat(groups, 1, 1, 1)
+                x = F.pad(x, self.padding, mode='constant')
+
+                if self.dim == 1:
+                    x = F.conv1d(x, local_filter, groups=groups)
+                elif self.dim == 2:
+                    x = F.conv2d(x, local_filter, groups=groups)
+                elif self.dim == 3:
+                    x = F.conv3d(x, local_filter, groups=groups)
+        return x
+
