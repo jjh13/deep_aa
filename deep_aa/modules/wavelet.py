@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from deep_aa.functional.wavelet import get_wavelet_filter_tensor
+from deep_aa.functional.wavelet import get_wavelet_filter_tensor, channel_shuffle
 
 
 class DyadicWavelet(nn.Module):
@@ -69,11 +69,11 @@ class DyadicWavelet(nn.Module):
             elif self.dim == 3:
                 local_filter = self.firbank[:, None, ...].repeat(self.channels_in, 1, 1, 1, 1)
                 x = F.conv3d(x, local_filter, groups=self.channels_in, stride=local_stride)
-            x = F.channel_shuffle(x, self.channels_in)
+            x = channel_shuffle(x, self.channels_in)
 
         else:
             groups = self.channels_in // self.bands_out
-            x = F.channel_shuffle(x, self.channels_in // self.channels_out)
+            x = channel_shuffle(x, self.channels_in // self.channels_out)
 
             if self.resample:
 

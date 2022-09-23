@@ -6,8 +6,8 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 
 
 setup(
-    name="deep-aa",  # Required
-    version="1.0.0",  # Required
+    name="deep_aa",  # Required
+    version="1.0.1",  # Required
     description="Anti-aliasing for pytorch models",  # Optional
     long_description=long_description,  # Optional
     long_description_content_type="text/markdown",  # Optional (see note above)
@@ -35,7 +35,8 @@ setup(
     ],
     # When your source code is in a subdirectory under the project root, e.g.
     # `src/`, it is necessary to specify the `package_dir` argument.
-    package_dir={"": "deep_aa"},  # Optional
+    package_dir={"deep_aa": "deep_aa"},  # Optional
+
     # You can just specify package directories manually here if your project is
     # simple. Or you can use find_packages().
     #
@@ -45,7 +46,7 @@ setup(
     #
     #   py_modules=["my_module"],
     #
-    packages=find_packages(where="deep_aa"),  # Required
+    packages=find_packages(where="."),  # Required
     # Specify which Python versions you support. In contrast to the
     # 'Programming Language' classifiers above, 'pip install' will check this
     # and refuse to install the project if the version does not match. See
