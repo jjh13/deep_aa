@@ -8,7 +8,7 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 setup(
     name="deep_aa",  # Required
     version="1.0.1",  # Required
-    description="Anti-aliasing for pytorch models",  # Optional
+    description="Anti-aliasing for pytorch datamodule",  # Optional
     long_description=long_description,  # Optional
     long_description_content_type="text/markdown",  # Optional (see note above)
     url="http://porygon.pkmn:3000/deep_aa",  # Optional
