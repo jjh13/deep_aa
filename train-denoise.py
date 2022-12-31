@@ -8,6 +8,7 @@ from deep_aa.modules.bpunet import BPUNet
 import torch.nn.functional as F
 import torch
 import random
+from multiprocessing import freeze_support
 
 
 class DenoiseModule(pl.LightningModule):
@@ -34,7 +35,8 @@ class DenoiseModule(pl.LightningModule):
             noise = torch.randn_like(x) * noise_stength
 
         x_hat = self(x + torch.randn_like(x) + noise)
-        loss = F.l1_loss(x, x_hat)
+        # loss = F.l1_loss(x, x_hat)
+        loss = F.mse_loss(x, x_hat)
         return loss
 
     def configure_optimizers(self):
@@ -48,6 +50,8 @@ class DenoiseModule(pl.LightningModule):
                     tag=k, values=v.grad, global_step=self.trainer.global_step
                 )
 
-cli = LightningCLI(model_class=DenoiseModule)
+if __name__ == '__main__':
+    freeze_support()
+    cli = LightningCLI(model_class=DenoiseModule)
 
 
