@@ -6,12 +6,15 @@ from deep_aa.modules.shuffle import WaveShuffle1d, WaveUnShuffle1d
 from deep_aa.modules.shuffle import WaveShuffle2d, WaveUnShuffle2d
 from deep_aa.modules.shuffle import WaveShuffle3d, WaveUnShuffle3d
 
+
+
+
 class TestWaveletUpDown(unittest.TestCase):
     def setUp(self):
         self.devices = [torch.device('cpu')]
 
-        # if torch.backends.mps.is_available():
-        #     self.devices += [torch.device('mps:0')]
+        if torch.backends.mps.is_available():
+            self.devices += [torch.device('mps:0')]
 
         if torch.cuda.is_available():
             self.devices += [torch.device('cuda:0')]
@@ -35,8 +38,8 @@ class TestWaveletUpDown(unittest.TestCase):
             ran = torch.rand(1, 1, 8, 8, device=device)
             ran = torch.nn.functional.pad(ran, pad=(10,10,10,10))
 
-            wus = WaveUnShuffle2d(1).to(device)
-            wsh = WaveShuffle2d(4).to(device)
+            wus = WaveUnShuffle2d(1, family='db1').to(device)
+            wsh = WaveShuffle2d(4, family='db1').to(device)
 
             x = wsh(wus(ran))
 

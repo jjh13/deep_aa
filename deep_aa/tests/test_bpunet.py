@@ -25,3 +25,7 @@ class TestBPUNet(unittest.TestCase):
 
         bpu = BPUNet(3, 3, 64)
         print(bpu(torch.rand(1,3,256,256)).shape)
+
+    def test_bpunet_full(self):
+        bpu = BPUNet(3, 3, 64, wavelet_family='db1', normalization='gn')
+        print(bpu(torch.rand(1, 3, 256, 256)).shape)
