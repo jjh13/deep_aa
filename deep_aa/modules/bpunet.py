@@ -9,7 +9,8 @@ class ConvNormRelu(nn.Module):
         super(ConvNormRelu, self).__init__()
         self.seq = nn.Sequential(
             nn.Conv2d(channels_in, channels_out, kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels_out),
+            nn.GroupNorm(8,channels_out),
+            # nn.BatchNorm2d(channels_out),
             nn.LeakyReLU(inplace=True)
         )
 
@@ -36,21 +37,25 @@ class BPUNet(nn.Module):
                  channels_out=3,
                  first_layer_channels=64,
                  max_depth=3,
+                 max_channels=512,
+                 no_wave=False,
                  final_act=None):
         super(BPUNet, self).__init__()
 
         self.network = nn.Sequential(
             # Preamble
             nn.Conv2d(channels_in, first_layer_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(first_layer_channels),
+            # nn.BatchNorm2d(first_layer_channels),
+            nn.GroupNorm(8, first_layer_channels),
+
             nn.LeakyReLU(inplace=True),
 
             # Do the recursive part
-            BPU_Recurse(first_layer_channels, 512, depth=0, max_depth=max_depth),
+            BPU_Recurse(first_layer_channels, max_channels, depth=0, max_depth=max_depth, no_wave=no_wave),
 
             # Do the postamble
             nn.Conv2d(first_layer_channels, first_layer_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(first_layer_channels),
+            # nn.BatchNorm2d(first_layer_channels),
             nn.LeakyReLU(inplace=True),
             nn.Conv2d(first_layer_channels, channels_out, kernel_size=1, padding=0),
             final_act if final_act is not None else nn.Sigmoid()
@@ -60,16 +65,33 @@ class BPUNet(nn.Module):
 
 
 class BPU_Recurse(nn.Module):
-    def __init__(self, channels_in, max_channels=512, depth=0, max_depth=3):
+    def __init__(self,
+                 channels_in,
+                 max_channels=512,
+                 depth=0,
+                 max_depth=3,
+                 no_wave=False):
         super().__init__()
 
         channels_down = min(channels_in * 2, max_channels)
 
-        self.down = nn.Sequential(
-            ResConv(channels_in, channels_down//2, channels_down),
-            ResConv(channels_down, channels_down//2, channels_down),
-            WaveUnShuffle2d(channels_down)
-        )
+        if no_wave:
+            self.down = nn.Sequential(
+                ResConv(channels_in, channels_down//2, channels_down),
+                ResConv(channels_down, channels_down//2, channels_down),
+                nn.Conv2d(channels_down,
+                          channels_down*4,
+                          stride=2,
+                          kernel_size=(3,3),
+                          padding=(1,1)
+                )
+            )
+        else:
+            self.down = nn.Sequential(
+                ResConv(channels_in, channels_down//2, channels_down),
+                ResConv(channels_down, channels_down//2, channels_down),
+                WaveUnShuffle2d(channels_down)
+            )
 
         if depth >= max_depth:
             self.middle = ResConv(channels_down, channels_down//2, channels_down)
@@ -77,13 +99,26 @@ class BPU_Recurse(nn.Module):
             self.middle = BPU_Recurse(channels_down,
                                       max_channels=max_channels,
                                       depth=depth+1,
-                                      max_depth=max_depth)
+                                      max_depth=max_depth,
+                                      no_wave=no_wave)
 
-        self.up = nn.Sequential(
-            WaveShuffle2d(channels_down * 4),
-            ResConv(channels_down, channels_down//2, channels_in),
-            ResConv(channels_in, channels_in//2, channels_in),
-        )
+        if no_wave:
+            self.up = nn.Sequential(
+                nn.ConvTranspose2d(channels_down*4,
+                          channels_down,
+                          stride=2,
+                          kernel_size=(4,4),
+                          padding=(1,1)
+                ),
+                ResConv(channels_down, channels_down//2, channels_in),
+                ResConv(channels_in, channels_in//2, channels_in),
+            )
+        else:
+            self.up = nn.Sequential(
+                WaveShuffle2d(channels_down * 4),
+                ResConv(channels_down, channels_down//2, channels_in),
+                ResConv(channels_in, channels_in//2, channels_in),
+            )
 
     def forward(self, x):
         ll, hl, lh, hh = self.down(x).chunk(4, dim=-3)
