@@ -6,7 +6,7 @@ import os
 import random
 import pytorch_lightning as pl
 from torch.utils.data import random_split, DataLoader
-
+import pathlib
 
 class Div2kDataset(Dataset):
     def __init__(self,
@@ -40,6 +40,8 @@ class Div2kDataset(Dataset):
         self.train = examples[:num_train]
         self.val = examples[num_train: num_train + num_val]
         self.upsample_size = upsample_size
+        # if not os.path.exists(self.cache_path):
+        pathlib.Path(self.cache_path).mkdir(parents=True, exist_ok=True)
 
     def __len__(self):
         l = len(self.train) if self.mode == 'train' else len(self.val)
@@ -50,6 +52,9 @@ class Div2kDataset(Dataset):
         nsamps = len(self.train if self.mode == 'train' else self.val)
         if idx >= self.dataset_repeats * nsamps:
             raise StopIteration
+
+        if self.mode == 'val':
+            random.seed(idx)
 
         ex_name = self.train[idx % nsamps] if self.mode == 'train' else self.val[idx % nsamps]
 
@@ -111,7 +116,7 @@ class Div2kDataModule(pl.LightningDataModule):
                                       'val',
                                       cache_path=self.cache_path,
                                       patch_size=self.patch_size,
-                                      dataset_repeats=self.dataset_repeats,
+                                      dataset_repeats=1,
                                       interpolation=self.interpolation,
                                       augmentation=self.augmentation,
                                       test_percent=self.test_precent,
@@ -119,7 +124,7 @@ class Div2kDataModule(pl.LightningDataModule):
 
 
     def train_dataloader(self):
-        return DataLoader(self.div2k, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.div2k, batch_size=self.batch_size, num_workers=self.num_workers, prefetch_factor=4)
 
     def val_dataloader(self):
         return DataLoader(self.div2k_test, batch_size=self.batch_size, num_workers=self.num_workers)

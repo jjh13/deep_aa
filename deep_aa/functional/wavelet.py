@@ -3,7 +3,22 @@ import torch
 import itertools
 
 
-def channel_shuffle(x: torch.Tensor, groups: int) -> torch.tensor:
+def channel_shuffle1d(x: torch.Tensor, groups: int) -> torch.tensor:
+    batchsize, num_channels, t = x.size()
+    channels_per_group = num_channels // groups
+
+    # reshape
+    x = x.view(batchsize, groups, channels_per_group, t)
+
+    x = torch.transpose(x, 1, 2).contiguous()
+
+    # flatten
+    x = x.view(batchsize, -1, t)
+
+    return x
+
+
+def channel_shuffle2d(x: torch.Tensor, groups: int) -> torch.tensor:
     batchsize, num_channels, height, width = x.size()
     channels_per_group = num_channels // groups
 
@@ -18,7 +33,21 @@ def channel_shuffle(x: torch.Tensor, groups: int) -> torch.tensor:
     return x
 
 
-def get_wavelet_filter_tensor(family, dim=2, step='dec', filters='full', flip=True):
+def channel_shuffle3d(x: torch.Tensor, groups: int) -> torch.tensor:
+    batchsize, num_channels, height, width, depth = x.size()
+    channels_per_group = num_channels // groups
+
+    # reshape
+    x = x.view(batchsize, groups, channels_per_group, height, width, depth)
+
+    x = torch.transpose(x, 1, 2).contiguous()
+
+    # flatten
+    x = x.view(batchsize, -1, height, width, depth)
+
+    return x
+
+def get_wavelet_filter_tensor(family, dim=2, step='dec', filters='full', flip=True, transpose=False):
     """
     This function takes a FIR wavelet family from PyWavelets and translates it into
     a PyTorch tensor. The 1D FIR filter is extended to {dim} dimensions via tensor product.
@@ -49,6 +78,10 @@ def get_wavelet_filter_tensor(family, dim=2, step='dec', filters='full', flip=Tr
     # Get the filter
     wavelet_filter = pywt.Wavelet(family)
     fdict = {}
+
+    if transpose:
+        step = 'dec' if step == 'rec' else 'rec'
+
     if step == 'dec':
         fdict['H'] = wavelet_filter.dec_hi
         fdict['L'] = wavelet_filter.dec_lo

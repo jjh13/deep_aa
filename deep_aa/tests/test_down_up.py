@@ -38,8 +38,8 @@ class TestWaveletUpDown(unittest.TestCase):
             ran = torch.rand(1, 1, 8, 8, device=device)
             ran = torch.nn.functional.pad(ran, pad=(10,10,10,10))
 
-            wus = WaveUnShuffle2d(1, family='db1').to(device)
-            wsh = WaveShuffle2d(4, family='db1').to(device)
+            wus = WaveUnShuffle2d(1, family='bior2.2').to(device)
+            wsh = WaveShuffle2d(4, family='bior2.2').to(device)
 
             x = wsh(wus(ran))
 
@@ -58,3 +58,23 @@ class TestWaveletUpDown(unittest.TestCase):
 
         print(nn.functional.mse_loss(x, ran))
         print(x.shape)
+
+    def test_prepad(self):
+        for device in self.devices:
+            ran = torch.rand(1, 16, 8, 8, device=device)
+            ran = torch.nn.functional.pad(ran, pad=(10,10,10,10))
+            print(ran.shape)
+
+            # wus = WaveUnShuffle2d(1, family='bior2.2').to(device)
+            wsh = WaveShuffle2d(16, family='db1').to(device)
+            wsh2 = WaveShuffle2d(4, family='db1').to(device)
+            x = wsh.pre_pad(ran)
+            x = wsh.pre_pad(x)
+            x = wsh(x, no_pad=True)
+            x = wsh2(x, no_pad=True)
+
+            # x = wsh(wus(ran))
+
+            # print(nn.functional.mse_loss(x, ran))
+            print(x.shape)
+
